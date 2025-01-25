@@ -1,26 +1,26 @@
 #!/bin/bash
 
-# Warna output
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-RED='\033[0;31m'
-NC='\033[0m'
-
-# Fungsi untuk menampilkan pesan sukses
-function success_message {
-    echo -e "${GREEN}[✔] $1${NC}"
+# Fungsi untuk menampilkan pesan berwarna
+print_message() {
+    COLOR=$1
+    MESSAGE=$2
+    echo -e "${COLOR}${MESSAGE}\033[0m"
 }
 
-# Fungsi untuk menampilkan pesan proses
-function info_message {
-    echo -e "${CYAN}[-] $1...${NC}"
+# Fungsi untuk menampilkan pesan sukses
+success_message() {
+    print_message "\033[0;32m" "[✔] $1"
+}
+
+# Fungsi untuk menampilkan pesan informasi
+info_message() {
+    print_message "\033[0;36m" "[-] $1..."
 }
 
 # Fungsi untuk menampilkan pesan kesalahan
-function error_message {
-    echo -e "${RED}[✘] $1${NC}"
+error_message() {
+    print_message "\033[0;31m" "[✘] $1"
 }
-
 
 # Fungsi untuk menampilkan pesan selamat datang
 print_welcome_message() {
@@ -38,12 +38,9 @@ print_welcome_message() {
 # Pembersihan layar
 clear
 print_welcome_message
-echo -e "${CYAN}========================================"
-echo "   Privasea Acceleration Node Setup"
-echo -e "========================================${NC}"
 echo ""
 
-# Langkah 0: Pengecekan spesifikasi sistem
+# Langkah 1: Pengecekan spesifikasi sistem
 info_message "Memeriksa spesifikasi sistem"
 
 CPU_CORES=$(nproc)
@@ -70,14 +67,27 @@ fi
 success_message "Sistem memenuhi persyaratan untuk $CONFIG_LEVEL"
 echo ""
 
-# Langkah 1: Pengecekan apakah Docker sudah terpasang
-if ! command -v docker &> /dev/null
-then
+# Langkah 2: Memastikan port 8181 terbuka
+info_message "Memeriksa apakah port 8181 terbuka"
+
+if ! sudo lsof -i:8181 > /dev/null; then
+    info_message "Port 8181 tidak terbuka. Membuka port 8181..."
+    sudo ufw allow 8181/tcp
+    success_message "Port 8181 berhasil dibuka."
+else
+    success_message "Port 8181 sudah terbuka."
+fi
+
+echo ""
+
+# Langkah 3: Pengecekan apakah Docker sudah terpasang
+if ! command -v docker &> /dev/null; then
     info_message "Docker tidak ditemukan, memulai instalasi Docker..."
     sudo apt update && sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    sudo apt update && sudo apt install -y docker-ce
+    sudo apt update
+    sudo apt install -y docker-ce
     sudo systemctl start docker
     sudo systemctl enable docker
     success_message "Docker berhasil diinstal dan dijalankan."
@@ -85,19 +95,7 @@ else
     success_message "Docker sudah terpasang. Lewati instalasi Docker."
 fi
 
-# Langkah 2: Pengecekan storage tersedia
-AVAILABLE_STORAGE=$(df -h / | awk 'NR==2 {print $4}')
-info_message "Storage yang tersedia: $AVAILABLE_STORAGE"
-
-# Langkah 3: Membuka port jika belum terbuka
-PORT=8181
-if ! sudo ufw status | grep -qw "$PORT"; then
-    info_message "Membuka port $PORT..."
-    sudo ufw allow $PORT/tcp
-    success_message "Port $PORT berhasil dibuka."
-else
-    success_message "Port $PORT sudah terbuka."
-fi
+echo ""
 
 # Langkah 4: Tarik gambar Docker
 info_message "Mengunduh gambar Docker"
@@ -108,71 +106,78 @@ else
     exit 1
 fi
 
+echo ""
+
 # Langkah 5: Buat direktori konfigurasi
-CONFIG_DIR="$HOME/privasea/config"
-info_message "Membuat direktori konfigurasi di $CONFIG_DIR"
-if mkdir -p "$CONFIG_DIR"; then
+info_message "Membuat direktori konfigurasi"
+if mkdir -p $HOME/privasea/config; then
     success_message "Direktori konfigurasi berhasil dibuat"
 else
     error_message "Gagal membuat direktori konfigurasi"
     exit 1
 fi
 
-# Langkah 6: Buat file keystore dan ambil node address
-info_message "Membuat file keystore dan mengambil node address"
-NODE_ADDRESS=$(docker run -it -v "$CONFIG_DIR:/app/config" \
-privasea/acceleration-node-beta:latest ./node-calc new_keystore 2>&1 | \
-grep -o '0x[0-9a-fA-F]\{40\}')
-if [ -n "$NODE_ADDRESS" ]; then
+echo ""
+
+# Langkah 6: Buat file keystore
+info_message "Membuat file keystore"
+if docker run -it -v "$HOME/privasea/config:/app/config" \
+privasea/acceleration-node-beta:latest ./node-calc new_keystore; then
     success_message "File keystore berhasil dibuat"
-    success_message "Node address: $NODE_ADDRESS"
 else
-    error_message "Gagal membuat file keystore atau mengambil node address"
+    error_message "Gagal membuat file keystore"
     exit 1
 fi
 
-# Langkah 7: Memindahkan file keystore ke nama baru
+echo ""
+
+# Langkah 7: Pindahkan file keystore ke nama baru
 info_message "Memindahkan file keystore"
-if mv $CONFIG_DIR/UTC--* $CONFIG_DIR/wallet_keystore; then
+if mv $HOME/privasea/config/UTC--* $HOME/privasea/config/wallet_keystore; then
     success_message "File keystore berhasil dipindahkan ke wallet_keystore"
 else
     error_message "Gagal memindahkan file keystore"
     exit 1
 fi
 
-# Langkah 8: Pilihan untuk melanjutkan atau tidak
-read -p "Apakah Anda ingin melanjutkan untuk menjalankan node (y/n)? " choice
-if [[ "$choice" != "y" ]]; then
-    echo -e "${CYAN}Proses dibatalkan.${NC}"
-    exit 0
-fi
-
-# Langkah 9: Meminta password untuk keystore
-info_message "Masukkan password untuk keystore (untuk mengakses node):"
-read -s KEYSTORE_PASSWORD
 echo ""
 
-# Langkah 10: Jalankan node
+# Langkah 8: Meminta password untuk keystore
+info_message "Buat password keystore akses node:"
+read -s KEystorePassword
+echo ""
+
+# Langkah 9: Jalankan node
 info_message "Menjalankan Privasea Acceleration Node"
-if docker run -d -v "$CONFIG_DIR:/app/config" \
--e KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD \
-privasea/acceleration-node-beta:latest; then
-    success_message "Node berhasil dijalankan"
+NODE_ID=$(docker run -d -v "$HOME/privasea/config:/app/config" \
+-e KEYSTORE_PASSWORD=$KEystorePassword \
+privasea/acceleration-node-beta:latest)
+
+if [ $? -eq 0 ]; then
+    success_message "Node berhasil dijalankan dengan ID $NODE_ID"
 else
     error_message "Gagal menjalankan node"
     exit 1
 fi
 
+echo ""
+
 # Kesimpulan
-echo -e "${GREEN}========================================"
-echo "   Setup Selesai"
-echo -e "========================================${NC}"
-echo ""
-echo -e "${CYAN}Informasi Penting:${NC}"
-echo -e "${CYAN}- Node address:${NC} $NODE_ADDRESS"
-echo -e "${CYAN}- Direktori konfigurasi:${NC} $CONFIG_DIR"
-echo -e "${CYAN}- File keystore:${NC} wallet_keystore"
-echo -e "${CYAN}- Password keystore:${NC} $KEYSTORE_PASSWORD"
-echo -e "${CYAN}- Port yang digunakan:${NC} $PORT"
-echo -e "${CYAN}- Storage yang tersedia:${NC} $AVAILABLE_STORAGE"
-echo ""
+echo -e "\033[0;32m========================================"
+echo "          Nyari Airdrop Auto install Privasea"
+echo "          => Kesimpulan Proses <= "
+echo -e "========================================\033[0m"
+echo -e "\033[0;36mSpesifikasi VPS mu:"
+echo "  - CPU Cores: $CPU_CORES"
+echo "  - RAM: ${TOTAL_RAM}MB"
+echo "  - Storage: $AVAILABLE_STORAGE"
+echo "  - Konfigurasi Level yang bisa dilakukan: $CONFIG_LEVEL"
+echo -e "\033[0;36mInformasi Penting:"
+echo "  - File konfigurasi: $HOME/privasea/config"
+echo "  - Keystore: wallet_keystore"
+echo "  - Password Keystore: $KEystorePassword"
+echo "  - Node ID: $(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $NODE_ID)"
+echo "  - Jangan lupa masukkan node addres ke dasboard Privaseanya"
+echo "  - untuk node addres ada"
+echo "  - di bagian print proses membuat file keystore"
+echo -e "========================================"
