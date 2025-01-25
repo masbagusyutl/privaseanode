@@ -1,149 +1,178 @@
 #!/bin/bash
 
-# Fungsi untuk menampilkan welcome message
+# Warna output
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+# Fungsi untuk menampilkan pesan sukses
+function success_message {
+    echo -e "${GREEN}[✔] $1${NC}"
+}
+
+# Fungsi untuk menampilkan pesan proses
+function info_message {
+    echo -e "${CYAN}[-] $1...${NC}"
+}
+
+# Fungsi untuk menampilkan pesan kesalahan
+function error_message {
+    echo -e "${RED}[✘] $1${NC}"
+}
+
+
+# Fungsi untuk menampilkan pesan selamat datang
 print_welcome_message() {
-    echo -e "\033[1;37m"  # Warna putih untuk teks
+    echo -e "\033[1;37m"
     echo " _  _ _   _ ____ ____ _    ____ _ ____ ___  ____ ____ ___ "
     echo "|\\ |  \\_/  |__| |__/ |    |__| | |__/ |  \\ |__/ |  | |__]"
-    echo "| \\|   |   |  | |  \\ |    |  | | |  \\ |__/ |  \\ |__| |       "
-    echo -e "\033[1;32m"  # Warna hijau untuk teks terang
+    echo "| \\|   |   |  | |  \\ |    |  | | |  \\ |__/ |  \\ |__| |    "
+    echo -e "\033[1;32m"
     echo "Nyari Airdrop Auto install Privasea"
-    echo -e "\033[1;33m"  # Warna kuning untuk teks terang
+    echo -e "\033[1;33m"
     echo "Telegram: https://t.me/nyariairdrop"
-    echo -e "\033[0m"  # Reset warna
+    echo -e "\033[0m"
 }
 
-# Menampilkan welcome message sebelum instalasi
+# Pembersihan layar
+clear
 print_welcome_message
+echo -e "${CYAN}========================================"
+echo "   Privasea Acceleration Node Setup"
+echo -e "========================================${NC}"
+echo ""
 
-# Fungsi untuk menampilkan informasi spesifikasi VPS
-display_vps_info() {
-    echo "🔍 Spesifikasi VPS yang digunakan:"
-    echo "================================"
-    echo "CPU: $(nproc) Core(s)"
-    echo "RAM: $(free -h | grep Mem | awk '{print $2}')"
-    echo "Disk: $(df -h | grep '/$' | awk '{print $2}')"
-    echo "OS: $(lsb_release -d | awk -F"\t" '{print $2}')"
-    echo "================================"
-}
+# Langkah 0: Pengecekan spesifikasi sistem
+info_message "Memeriksa spesifikasi sistem"
 
-# Fungsi untuk menentukan konfigurasi yang disarankan berdasarkan spesifikasi VPS
-recommend_configuration() {
-    cores=$(nproc)
-    ram=$(free -h | grep Mem | awk '{print $2}' | sed 's/[^0-9]*//g')
+CPU_CORES=$(nproc)
+TOTAL_RAM=$(free -m | awk '/^Mem:/{print $2}')
+AVAILABLE_STORAGE=$(df -h / | awk '/\//{print $(NF-2)}')
 
-    echo "⚙️ Menentukan konfigurasi yang disarankan berdasarkan spesifikasi VPS..."
+info_message "Jumlah inti prosesor: $CPU_CORES"
+info_message "Total RAM: ${TOTAL_RAM}MB"
+info_message "Ruang penyimpanan tersedia: $AVAILABLE_STORAGE"
 
-    if [[ "$cores" -ge 16 && "$ram" -ge 8 ]]; then
-        echo "📈 Level 1 (Rekomendasi Terbaik)"
-        echo "OS: Debian/Ubuntu (Recommended)"
-        echo "Storage: 100GB available"
-        echo "Memory: 8GB RAM"
-        echo "Processor: 16 cores"
-        echo "Network: Public static IP"
-        echo "Port: Open TCP port 8181"
-        echo "==============================="
-        cpu_limit="--cpus='8.0'"
-    elif [[ "$cores" -ge 8 && "$ram" -ge 4 ]]; then
-        echo "📈 Level 2"
-        echo "OS: Debian/Ubuntu (Recommended)"
-        echo "Storage: 100GB available"
-        echo "Memory: 4GB RAM"
-        echo "Processor: 8 cores"
-        echo "Network: Public static IP"
-        echo "Port: Open TCP port 8181"
-        echo "==============================="
-        cpu_limit="--cpus='4.0'"
-    elif [[ "$cores" -ge 4 && "$ram" -ge 4 ]]; then
-        echo "📊 Level 3"
-        echo "OS: Debian/Ubuntu (Recommended)"
-        echo "Storage: 100GB available"
-        echo "Memory: 4GB RAM"
-        echo "Processor: 4 cores"
-        echo "Network: Public static IP"
-        echo "Port: Open TCP port 8181"
-        echo "==============================="
-        cpu_limit="--cpus='2.0'"
-    else
-        echo "⚠️ Level 4"
-        echo "OS: Debian/Ubuntu (Recommended)"
-        echo "Storage: 100GB available"
-        echo "Memory: 4GB RAM or below"
-        echo "Processor: 2 cores or below"
-        echo "Network: Public static IP"
-        echo "Port: Open TCP port 8181"
-        echo "==============================="
-        cpu_limit="--cpus='1.0'"
-    fi
-}
+if [ "$CPU_CORES" -ge 16 ] && [ "$TOTAL_RAM" -ge 8192 ]; then
+    CONFIG_LEVEL="Level 1"
+elif [ "$CPU_CORES" -ge 8 ] && [ "$TOTAL_RAM" -ge 4096 ]; then
+    CONFIG_LEVEL="Level 2"
+elif [ "$CPU_CORES" -ge 4 ] && [ "$TOTAL_RAM" -ge 4096 ]; then
+    CONFIG_LEVEL="Level 3"
+elif [ "$CPU_CORES" -ge 2 ] && [ "$TOTAL_RAM" -le 4096 ]; then
+    CONFIG_LEVEL="Level 4"
+else
+    error_message "Spesifikasi sistem tidak memenuhi persyaratan minimum."
+    exit 1
+fi
 
-# Fungsi untuk menginstal Docker jika belum terinstal
-check_and_install_docker() {
-    if ! command -v docker &> /dev/null
-    then
-        echo "🛑 Docker tidak ditemukan, menginstal Docker..."
-        install_docker
-    else
-        echo "✅ Docker sudah terinstal, melanjutkan instalasi node..."
-    fi
-}
+success_message "Sistem memenuhi persyaratan untuk $CONFIG_LEVEL"
+echo ""
 
-# Fungsi untuk instalasi Docker
-install_docker() {
+# Langkah 1: Pengecekan apakah Docker sudah terpasang
+if ! command -v docker &> /dev/null
+then
+    info_message "Docker tidak ditemukan, memulai instalasi Docker..."
     sudo apt update && sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     sudo apt update && sudo apt install -y docker-ce
     sudo systemctl start docker
     sudo systemctl enable docker
-}
+    success_message "Docker berhasil diinstal dan dijalankan."
+else
+    success_message "Docker sudah terpasang. Lewati instalasi Docker."
+fi
 
-# Fungsi untuk setup firewall
-setup_firewall() {
-    echo "🛡️ Mengatur firewall untuk membuka port 8181..."
-    sudo ufw allow 8181/tcp
-    sudo ufw enable
-}
+# Langkah 2: Pengecekan storage tersedia
+AVAILABLE_STORAGE=$(df -h / | awk 'NR==2 {print $4}')
+info_message "Storage yang tersedia: $AVAILABLE_STORAGE"
 
-# Fungsi untuk membuat keystore wallet baru dengan password otomatis
-create_keystore() {
-    echo "🔑 Membuat keystore wallet baru..."
-    mkdir -p /privasea/config
+# Langkah 3: Membuka port jika belum terbuka
+PORT=8181
+if ! sudo ufw status | grep -qw "$PORT"; then
+    info_message "Membuka port $PORT..."
+    sudo ufw allow $PORT/tcp
+    success_message "Port $PORT berhasil dibuka."
+else
+    success_message "Port $PORT sudah terbuka."
+fi
 
-    # Cek apakah password sudah ada
-    if [ ! -f "/privasea/config/password.txt" ]; then
-        PASSWORD=$(openssl rand -base64 12)  # Generate password acak
-        echo "$PASSWORD" > /privasea/config/password.txt
-        chmod 600 /privasea/config/password.txt  # Lindungi file password
-    else
-        PASSWORD=$(cat /privasea/config/password.txt)
-    fi
+# Langkah 4: Tarik gambar Docker
+info_message "Mengunduh gambar Docker"
+if docker pull privasea/acceleration-node-beta:latest; then
+    success_message "Gambar Docker berhasil diunduh"
+else
+    error_message "Gagal mengunduh gambar Docker"
+    exit 1
+fi
 
-    echo "⚠️ Password keystore: $PASSWORD (tersimpan di /privasea/config/password.txt)"
-    docker run -it -v "/privasea/config:/app/config" privasea/acceleration-node-beta:latest ./node-calc new_keystore <<< "$PASSWORD"
-}
+# Langkah 5: Buat direktori konfigurasi
+CONFIG_DIR="$HOME/privasea/config"
+info_message "Membuat direktori konfigurasi di $CONFIG_DIR"
+if mkdir -p "$CONFIG_DIR"; then
+    success_message "Direktori konfigurasi berhasil dibuat"
+else
+    error_message "Gagal membuat direktori konfigurasi"
+    exit 1
+fi
 
-# Fungsi untuk menjalankan node dengan Docker
-run_node() {
-    echo "🚀 Menjalankan Privanetix Node..."
-    docker pull privasea/acceleration-node-beta:latest
-    docker run -d -p 8181:8181 $cpu_limit -v /privasea/config:/app/config privasea/acceleration-node-beta:latest
-}
+# Langkah 6: Buat file keystore dan ambil node address
+info_message "Membuat file keystore dan mengambil node address"
+NODE_ADDRESS=$(docker run -it -v "$CONFIG_DIR:/app/config" \
+privasea/acceleration-node-beta:latest ./node-calc new_keystore 2>&1 | \
+grep -o '0x[0-9a-fA-F]\{40\}')
+if [ -n "$NODE_ADDRESS" ]; then
+    success_message "File keystore berhasil dibuat"
+    success_message "Node address: $NODE_ADDRESS"
+else
+    error_message "Gagal membuat file keystore atau mengambil node address"
+    exit 1
+fi
 
-# Fungsi untuk menambahkan auto-restart saat VPS reboot
-enable_autostart() {
-    echo "🔄 Mengaktifkan auto-restart node..."
-    (crontab -l 2>/dev/null; echo "@reboot docker run -d -p 8181:8181 $cpu_limit -v /privasea/config:/app/config privasea/acceleration-node-beta:latest") | crontab -
-}
+# Langkah 7: Memindahkan file keystore ke nama baru
+info_message "Memindahkan file keystore"
+if mv $CONFIG_DIR/UTC--* $CONFIG_DIR/wallet_keystore; then
+    success_message "File keystore berhasil dipindahkan ke wallet_keystore"
+else
+    error_message "Gagal memindahkan file keystore"
+    exit 1
+fi
 
-# Menjalankan fungsi
-print_welcome_message
-display_vps_info
-recommend_configuration
-check_and_install_docker
-setup_firewall
-create_keystore
-run_node
-enable_autostart
+# Langkah 8: Pilihan untuk melanjutkan atau tidak
+read -p "Apakah Anda ingin melanjutkan untuk menjalankan node (y/n)? " choice
+if [[ "$choice" != "y" ]]; then
+    echo -e "${CYAN}Proses dibatalkan.${NC}"
+    exit 0
+fi
 
-echo "✅ Instalasi selesai! Gunakan 'docker ps' untuk cek status node."
+# Langkah 9: Meminta password untuk keystore
+info_message "Masukkan password untuk keystore (untuk mengakses node):"
+read -s KEYSTORE_PASSWORD
+echo ""
+
+# Langkah 10: Jalankan node
+info_message "Menjalankan Privasea Acceleration Node"
+if docker run -d -v "$CONFIG_DIR:/app/config" \
+-e KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD \
+privasea/acceleration-node-beta:latest; then
+    success_message "Node berhasil dijalankan"
+else
+    error_message "Gagal menjalankan node"
+    exit 1
+fi
+
+# Kesimpulan
+echo -e "${GREEN}========================================"
+echo "   Setup Selesai"
+echo -e "========================================${NC}"
+echo ""
+echo -e "${CYAN}Informasi Penting:${NC}"
+echo -e "${CYAN}- Node address:${NC} $NODE_ADDRESS"
+echo -e "${CYAN}- Direktori konfigurasi:${NC} $CONFIG_DIR"
+echo -e "${CYAN}- File keystore:${NC} wallet_keystore"
+echo -e "${CYAN}- Password keystore:${NC} $KEYSTORE_PASSWORD"
+echo -e "${CYAN}- Port yang digunakan:${NC} $PORT"
+echo -e "${CYAN}- Storage yang tersedia:${NC} $AVAILABLE_STORAGE"
+echo ""
