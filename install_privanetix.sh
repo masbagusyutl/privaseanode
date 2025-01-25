@@ -143,7 +143,7 @@ fi
 echo ""
 
 # Langkah 8: Meminta password untuk keystore
-info_message "Buat password keystore akses node:"
+info_message "Masukkan password saat membuat file keystore tadi:"
 read -s KEystorePassword
 echo ""
 
@@ -164,7 +164,7 @@ echo ""
 
 # Kesimpulan
 echo -e "\033[0;32m========================================"
-echo "          Nyari Airdrop Auto install Privasea"
+echo "     Nyari Airdrop Auto install Privasea"
 echo "          => Kesimpulan Proses <= "
 echo -e "========================================\033[0m"
 echo -e "\033[0;36mSpesifikasi VPS mu:"
@@ -176,8 +176,7 @@ echo -e "\033[0;36mInformasi Penting:"
 echo "  - File konfigurasi: $HOME/privasea/config"
 echo "  - Keystore: wallet_keystore"
 echo "  - Password Keystore: $KEystorePassword"
-echo "  - Node ID: $(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $NODE_ID)"
 echo "  - Jangan lupa masukkan node addres ke dasboard Privaseanya"
 echo "  - untuk node addres ada"
-echo "  - di bagian print proses membuat file keystore"
+echo "  - di bagian print proses saat membuat file keystore"
 echo -e "========================================"
